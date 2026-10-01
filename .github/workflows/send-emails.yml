@@ -1,0 +1,76 @@
+name: Send Daily Outreach Emails
+
+# Runs Mon-Sat at 9:30 AM US Eastern.
+# Cron is always UTC, and US Eastern switches between UTC-4 (EDT) and
+# UTC-5 (EST) during the year, so we fire at both possible UTC times.
+# The script itself checks the real US-Eastern clock and does nothing
+# at the firing that doesn't land near 9:30 AM ET - that one exits in a
+# couple of seconds without calling Notion or Gmail at all.
+on:
+  schedule:
+    - cron: "30 13 * * 1-6" # 9:30 AM EDT (UTC-4)
+    - cron: "30 14 * * 1-6" # 9:30 AM EST (UTC-5)
+  workflow_dispatch:
+    inputs:
+      dry_run_override:
+        description: "Dry run"
+        type: choice
+        options:
+          - use_notion_setting
+          - force_true
+          - force_false
+        default: use_notion_setting
+      limit:
+        description: "Max leads to process (blank = use Notion Daily Limit)"
+        type: string
+        default: ""
+      test_email:
+        description: "Send every email in this run to this address instead (blank = send to real leads). Leads are NOT marked Sent in this mode."
+        type: string
+        default: ""
+      ignore_pause:
+        description: "Run even if Pause Sending is ON in Notion"
+        type: boolean
+        default: false
+      send_delay_min:
+        description: "Minimum seconds to wait between sends"
+        type: string
+        default: "20"
+      send_delay_max:
+        description: "Maximum seconds to wait between sends"
+        type: string
+        default: "60"
+
+concurrency:
+  group: website-hq-send-emails
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Send emails
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          MAIN_DATA_SOURCE_ID: ${{ secrets.MAIN_DATA_SOURCE_ID }}
+          SETTINGS_DATA_SOURCE_ID: ${{ secrets.SETTINGS_DATA_SOURCE_ID }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SENDER_NAME: Ayush
+          DRY_RUN_OVERRIDE: ${{ inputs.dry_run_override == 'force_true' && 'true' || inputs.dry_run_override == 'force_false' && 'false' || '' }}
+          TEST_LIMIT: ${{ inputs.limit }}
+          TEST_EMAIL_OVERRIDE: ${{ inputs.test_email }}
+          ALLOW_WHILE_PAUSED: ${{ inputs.ignore_pause }}
+          SEND_DELAY_MIN_SECONDS: ${{ inputs.send_delay_min || '20' }}
+          SEND_DELAY_MAX_SECONDS: ${{ inputs.send_delay_max || '60' }}
+        run: python scripts/send_emails.py
