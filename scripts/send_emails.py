@@ -52,8 +52,8 @@ DRY_RUN_OVERRIDE = os.environ.get("DRY_RUN_OVERRIDE", "").strip().lower()  # "",
 TEST_LIMIT = os.environ.get("TEST_LIMIT", "").strip()  # "" or an integer string
 TEST_EMAIL_OVERRIDE = os.environ.get("TEST_EMAIL_OVERRIDE", "").strip()  # "" or an address
 ALLOW_WHILE_PAUSED = os.environ.get("ALLOW_WHILE_PAUSED", "false").strip().lower() == "true"
-SEND_DELAY_MIN_SECONDS = float(os.environ.get("SEND_DELAY_MIN_SECONDS", "20") or "20")
-SEND_DELAY_MAX_SECONDS = float(os.environ.get("SEND_DELAY_MAX_SECONDS", "60") or "60")
+SEND_DELAY_MIN_SECONDS = float(os.environ.get("SEND_DELAY_MIN_SECONDS", "40") or "40")
+SEND_DELAY_MAX_SECONDS = float(os.environ.get("SEND_DELAY_MAX_SECONDS", "80") or "80")
 
 IS_SCHEDULED = os.environ.get("GITHUB_EVENT_NAME", "") == "schedule"
 

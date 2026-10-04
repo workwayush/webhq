@@ -35,11 +35,11 @@ on:
       send_delay_min:
         description: "Minimum seconds to wait between sends"
         type: string
-        default: "20"
+        default: "40"
       send_delay_max:
         description: "Maximum seconds to wait between sends"
         type: string
-        default: "60"
+        default: "80"
 
 concurrency:
   group: website-hq-send-emails
@@ -71,6 +71,6 @@ jobs:
           TEST_LIMIT: ${{ inputs.limit }}
           TEST_EMAIL_OVERRIDE: ${{ inputs.test_email }}
           ALLOW_WHILE_PAUSED: ${{ inputs.ignore_pause }}
-          SEND_DELAY_MIN_SECONDS: ${{ inputs.send_delay_min || '20' }}
-          SEND_DELAY_MAX_SECONDS: ${{ inputs.send_delay_max || '60' }}
+          SEND_DELAY_MIN_SECONDS: ${{ inputs.send_delay_min || '40' }}
+          SEND_DELAY_MAX_SECONDS: ${{ inputs.send_delay_max || '80' }}
         run: python scripts/send_emails.py
