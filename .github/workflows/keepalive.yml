@@ -1,0 +1,40 @@
+name: Keep Scheduled Sending Alive
+
+# GitHub automatically switches OFF scheduled workflows in a public repo when
+# the repo has had no activity for 60 days. That would silently stop the daily
+# sending. This workflow runs twice a month and does two harmless things:
+#   1. commits a timestamp to .github/keepalive.txt (counts as repo activity)
+#   2. re-enables the sender workflow and itself through the API, which also
+#      resets GitHub's 60-day inactivity timer
+# It never reads Notion, never touches Gmail and has no access to any secret.
+on:
+  schedule:
+    - cron: "17 6 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record a heartbeat commit
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive.txt
+          git commit -m "chore: keepalive heartbeat"
+          git push
+
+      - name: Re-enable the scheduled workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/send-emails.yml/enable"
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
