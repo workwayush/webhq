@@ -122,7 +122,61 @@ def get_settings():
         "dry_run": bool(chosen.get("Dry Run", {}).get("checkbox")),
         "pause_sending": bool(chosen.get("Pause Sending", {}).get("checkbox")),
         "send_days": [opt["name"] for opt in chosen.get("Send Days", {}).get("multi_select", [])],
+        # Opt-in: if the checkbox is missing or unticked, nothing is auto-queued.
+        "auto_queue": bool(chosen.get("Auto Queue", {}).get("checkbox")),
     }
+
+
+def count_ready_leads(cap: int) -> int:
+    """How many leads are already Ready (counted up to `cap`)."""
+    body = {
+        "filter": {"property": "Status", "select": {"equals": "Ready"}},
+        "page_size": min(max(cap, 1), 100),
+    }
+    result = notion_request("POST", f"/data_sources/{MAIN_DATA_SOURCE_ID}/query", body)
+    return len(result.get("results", []))
+
+
+def top_up_ready_leads(target: int, dry_run: bool) -> int:
+    """Make sure `target` leads are Ready by promoting the oldest New leads.
+
+    Only leads that have an email address, a subject and a message are
+    eligible, so nothing half-written is ever queued. Leads that are already
+    Ready (for example left over from an earlier run that stopped early) count
+    towards the target, so re-running never queues more than the daily limit.
+    Returns how many leads were (or, in dry run, would be) promoted.
+    """
+    already_ready = count_ready_leads(target)
+    needed = target - already_ready
+    print(f"Auto Queue: {already_ready} lead(s) already Ready, target {target}.")
+    if needed <= 0:
+        return 0
+    body = {
+        "filter": {
+            "and": [
+                {"property": "Status", "select": {"equals": "New"}},
+                {"property": "Email", "email": {"is_not_empty": True}},
+                {"property": "Email Subject", "rich_text": {"is_not_empty": True}},
+                {"property": "Email Message", "rich_text": {"is_not_empty": True}},
+            ]
+        },
+        "sorts": [{"timestamp": "created_time", "direction": "ascending"}],
+        "page_size": min(needed, 100),
+    }
+    result = notion_request("POST", f"/data_sources/{MAIN_DATA_SOURCE_ID}/query", body)
+    rows = result.get("results", [])[:needed]
+    if not rows:
+        print("Auto Queue: no New leads left to queue.")
+        return 0
+    if dry_run:
+        print(f"[DRY RUN] Auto Queue would set {len(rows)} New lead(s) to Ready.")
+        return len(rows)
+    for row in rows:
+        update_lead_status(row["id"], "Ready")
+    print(f"Auto Queue: set {len(rows)} New lead(s) to Ready.")
+    if len(rows) < needed:
+        print(f"Auto Queue: only {len(rows)} New lead(s) were left, fewer than the {needed} needed. Time to add more leads.")
+    return len(rows)
 
 
 def query_ready_leads(limit: int):
@@ -275,6 +329,12 @@ def main():
         print("Lead statuses will NOT be changed in test mode, so no real leads are consumed.")
 
     print(f"Dry run: {dry_run} | Limit: {limit}")
+
+    # Test mode never queues anything: it must not touch real leads.
+    if settings["auto_queue"] and not test_mode:
+        top_up_ready_leads(limit, dry_run)
+    elif settings["auto_queue"]:
+        print("Auto Queue skipped in test mode.")
 
     leads = query_ready_leads(limit)
     if not leads:

@@ -44,6 +44,12 @@ repo), in a single row called "Current":
   no email and makes no Notion changes.
 - **Send Days** - which weekdays the scheduled run is allowed to act on.
 - **Daily Limit** - max leads processed per run.
+- **Auto Queue** - while ON, at the start of each real send run the
+  script sets the oldest "New" leads (that have an email, subject and
+  message) to "Ready" until the Daily Limit is filled, so you never have to
+  mark leads Ready by hand. Leads already Ready count towards the limit.
+  While OFF (or missing), only leads you mark Ready yourself are sent.
+  Dry runs and test-email runs never change any lead.
 
 Change these in Notion any time; nothing needs to be redeployed here.
 
