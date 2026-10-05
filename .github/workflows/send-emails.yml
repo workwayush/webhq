@@ -51,7 +51,7 @@ permissions:
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +71,7 @@ jobs:
           TEST_LIMIT: ${{ inputs.limit }}
           TEST_EMAIL_OVERRIDE: ${{ inputs.test_email }}
           ALLOW_WHILE_PAUSED: ${{ inputs.ignore_pause }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
           SEND_DELAY_MIN_SECONDS: ${{ inputs.send_delay_min || '40' }}
           SEND_DELAY_MAX_SECONDS: ${{ inputs.send_delay_max || '80' }}
         run: python scripts/send_emails.py

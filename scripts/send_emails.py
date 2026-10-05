@@ -175,12 +175,35 @@ def send_email(to_addr: str, subject: str, body: str):
 # Scheduling guards
 # ---------------------------------------------------------------------------
 
-def in_send_time_window(now_et: datetime) -> bool:
-    # The workflow fires at 9:30 AM ET twice a day (once for each possible
-    # UTC offset, to cover both EST and EDT without needing to know which
-    # one applies). Only the firing that actually lands near 9:30 ET does
-    # anything; the other is a fast no-op.
-    return now_et.hour == 9 and 25 <= now_et.minute <= 35
+SCHEDULE_CRON = os.environ.get("SCHEDULE_CRON", "").strip()
+
+# Which US-Eastern UTC offset (in hours) each cron firing is meant for.
+CRON_EXPECTED_OFFSET = {
+    "30 13 * * 1-6": -4,  # 9:30 AM EDT
+    "30 14 * * 1-6": -5,  # 9:30 AM EST
+}
+
+
+def in_send_time_window(now_et: datetime):
+    """Return (ok, reason).
+
+    The workflow fires twice a day (once for each possible UTC offset, to
+    cover both EST and EDT). GitHub often starts scheduled runs many minutes
+    - sometimes over an hour - late, so we must NOT demand an exact minute.
+    Instead: the firing is valid only if it is the one whose UTC offset
+    matches the real US-Eastern offset right now (so exactly one of the two
+    firings ever sends per day), and it is still morning in the US.
+    """
+    expected = CRON_EXPECTED_OFFSET.get(SCHEDULE_CRON)
+    if expected is not None:
+        offset = now_et.utcoffset().total_seconds() / 3600
+        if offset != expected:
+            return False, "this is the other (daylight-saving) firing - nothing to do"
+    if now_et.hour < 9:
+        return False, "too early (before 9:00 AM US Eastern)"
+    if now_et.hour >= 13:
+        return False, "fired too late (after 1:00 PM US Eastern); skipping today's batch"
+    return True, ""
 
 
 def today_name(now_et: datetime) -> str:
@@ -213,9 +236,12 @@ def main():
     print(f"Settings from Notion: {settings}")
 
     if IS_SCHEDULED:
-        if not in_send_time_window(now_et):
-            print("Not within the 9:30 AM ET send window for this firing. Exiting quietly.")
-            sys.exit(0)
+        in_window, why = in_send_time_window(now_et)
+        if not in_window:
+            print(f"Not sending on this firing: {why}. Exiting.")
+            # The late-firing case is a missed day, so make it loud (GitHub
+            # emails failed runs). The other firing is the normal quiet no-op.
+            sys.exit(1 if "too late" in why else 0)
         if today_name(now_et) not in settings["send_days"]:
             print(f"{today_name(now_et)} is not a configured send day. Exiting.")
             sys.exit(0)
