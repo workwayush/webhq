@@ -1,0 +1,54 @@
+name: Test Send (fake emails)
+
+# Manual only. Sends FAKE outreach emails to the addresses typed into the
+# temporary Notion table "Test Recipients (Temp)". Never touches real leads.
+on:
+  workflow_dispatch:
+    inputs:
+      recipients_data_source_id:
+        description: "Notion data source ID of the Test Recipients (Temp) table"
+        type: string
+        required: true
+      emails_per_address:
+        description: "Fake emails per address (a row's 'Emails to send' overrides this)"
+        type: string
+        default: "5"
+      send_delay_min:
+        description: "Minimum seconds to wait between sends"
+        type: string
+        default: "40"
+      send_delay_max:
+        description: "Maximum seconds to wait between sends"
+        type: string
+        default: "80"
+
+# Same group as the real sender so a test never overlaps a real send.
+concurrency:
+  group: website-hq-send-emails
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Send fake test emails
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SENDER_NAME: Ayush
+          RECIPIENTS_DATA_SOURCE_ID: ${{ inputs.recipients_data_source_id }}
+          EMAILS_PER_ADDRESS: ${{ inputs.emails_per_address || '5' }}
+          SEND_DELAY_MIN_SECONDS: ${{ inputs.send_delay_min || '40' }}
+          SEND_DELAY_MAX_SECONDS: ${{ inputs.send_delay_max || '80' }}
+        run: python scripts/test_send.py
